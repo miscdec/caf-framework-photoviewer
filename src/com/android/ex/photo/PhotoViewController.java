@@ -24,8 +24,8 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewPropertyAnimator;
-import android.view.WindowManager;
 import android.view.ViewTreeObserver.OnGlobalLayoutListener;
+import android.view.WindowManager;
 import android.view.accessibility.AccessibilityManager;
 import android.view.animation.AlphaAnimation;
 import android.view.animation.Animation;
@@ -179,6 +179,8 @@ public class PhotoViewController implements
     protected int mAnimationStartWidth;
     protected int mAnimationStartHeight;
 
+    /** Whether lights out should invoked based on timer */
+    protected boolean mIsTimerLightsOutEnabled;
     protected boolean mActionBarHiddenInitially;
     protected boolean mDisplayThumbsFullScreen;
 
@@ -194,6 +196,8 @@ public class PhotoViewController implements
     // track the loading by this variable which is fragile and may cause phantom "loading..."
     // text.
     private long mEnterFullScreenDelayTime;
+
+    private boolean isTitleAnnounced;
 
     public PhotoViewController(ActivityInterface activity) {
         mActivity = activity;
@@ -237,6 +241,10 @@ public class PhotoViewController implements
         if (intent.hasExtra(Intents.EXTRA_PHOTOS_URI)) {
             mPhotosUri = intent.getStringExtra(Intents.EXTRA_PHOTOS_URI);
         }
+
+        mIsTimerLightsOutEnabled = intent.getBooleanExtra(
+                Intents.EXTRA_ENABLE_TIMER_LIGHTS_OUT, true);
+
         if (intent.getBooleanExtra(Intents.EXTRA_SCALE_UP_ANIMATION, false)) {
             mScaleAnimationEnabled = true;
             mAnimationStartX = intent.getIntExtra(Intents.EXTRA_ANIMATION_START_X, 0);
@@ -704,8 +712,14 @@ public class PhotoViewController implements
         }
     }
 
+    /**
+     * Posts a runnable to enter full screen after mEnterFullScreenDelayTime. This method is a
+     * no-op if mIsTimerLightsOutEnabled is set to false.
+     */
     private void postEnterFullScreenRunnableWithDelay() {
-        mHandler.postDelayed(mEnterFullScreenRunnable, mEnterFullScreenDelayTime);
+        if (mIsTimerLightsOutEnabled) {
+            mHandler.postDelayed(mEnterFullScreenRunnable, mEnterFullScreenDelayTime);
+        }
     }
 
     private void cancelEnterFullScreenRunnable() {
@@ -737,10 +751,11 @@ public class PhotoViewController implements
         int uriIndex = cursor.getColumnIndex(PhotoContract.PhotoViewColumns.URI);
         mCurrentPhotoUri = cursor.getString(uriIndex);
         updateActionBar();
-        if (mAccessibilityManager.isEnabled()) {
+        if (mAccessibilityManager.isEnabled() && isTitleAnnounced == false) {
             String announcement = getPhotoAccessibilityAnnouncement(position);
             if (announcement != null) {
                 Util.announceForAccessibility(mRootView, mAccessibilityManager, announcement);
+                isTitleAnnounced = true;
             }
         }
 
